@@ -1,0 +1,5 @@
+# This is the demo environment file to use. Rename it to .env and set your values
+APRS_API_KEY=
+APRS_FOLLOW_CALL=
+TELEGRAM_TOKEN=
+LOG_FILE_PATH=
