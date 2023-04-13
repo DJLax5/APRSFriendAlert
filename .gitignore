@@ -160,3 +160,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# The files created by the APRS Bot are not to be committed
+aprsBot.log
+aprsBotData.xml
+
