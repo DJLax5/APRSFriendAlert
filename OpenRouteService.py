@@ -8,6 +8,8 @@ import numpy as np
 class OpenRouteService:
 
     def __init__(self):
+        """ Constructor for the OpenRouteServeice API. It reads the API Key from the .env file and tries to test the connection. """
+
         # Define the URL Endpoints we need 
         self.ROUTE_CAR_ENDPOINT = "https://api.openrouteservice.org/v2/directions/driving-car"
         self.GEOCODE_ENDPOINT = "https://api.openrouteservice.org/geocode/search"
@@ -25,8 +27,9 @@ class OpenRouteService:
         else:
             cf.log.critical('[ORS] ORS Key is not set, cannot use ORS.')
 
-    # Function to geocode a text to coordinates, returns a list of the coordinates, if valid, None otherwise
+    
     def geocode(self, text, tryAnyway = False):
+        """ Function to geocode a text to coordinates, returns a list of the coordinates [longitude, latitude], if valid, None otherwise. It will not run, if the startup validation failed. This can be overridden by setting tryAnyway = True. """
         if self.validated or tryAnyway: # check if the demo bounce was successfull
             params = {
                 "api_key":self.key,
@@ -51,8 +54,8 @@ class OpenRouteService:
             return None
 
 
-    # Function to get the travel time between the coordinates start, dest. Returns a list of two numbers. the first is the distance in km the second the travel time in minutes
     def getRouteSummary(self, start, dest, tryAnyway = False):
+        """Function to get the travel time between the coordinates start, dest. Returns a list of two numbers. The first is the distance in km the second the travel time in minutes. It will not run, if the startup validation failed. This can be overridden by setting tryAnyway = True. """
         if self.validated or tryAnyway:
             try:
                 params = {

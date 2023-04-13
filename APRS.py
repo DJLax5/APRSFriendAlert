@@ -9,6 +9,8 @@ import numpy as np
 class APRS(threading.Thread):
 
     def __init__(self):
+        """ Constructor for the APRS API Object. It reads the key and Call from the .env file an tries to test the connection. """
+
         # As this is a child class, execute the parent constructor
         super().__init__()
         self._stop_event = threading.Event()
@@ -27,7 +29,7 @@ class APRS(threading.Thread):
 
         # check the correctness of the set data
         self.validated = False
-        if self.key != None and self.key != '':
+        if self.key != None and self.key != '' and self.call != None and self.call != '':
             data = self.getPosition(tryAnyway=True) 
             if data != None:
                 self.validated = True
@@ -38,12 +40,14 @@ class APRS(threading.Thread):
                 cf.log.critical('[APRS] Unable to validate APRS API!')
 
         else:
-            cf.log.error('[APRS] APRS API Key is not set, cannot use APRS!')
+            cf.log.error('[APRS] APRS API Key/Call is not set, cannot use APRS!')
 
-    def stop(self): # to peacfully exit the infiite loop
+    def stop(self):
+        """ Stops the thread. To peacfully exit the infiite loop"""
         self._stop_event.set()
 
-    def run(self): # entry point for the new thread
+    def run(self): 
+        """ This is the entry point for the loop. It will start to query APRS.fi and get the position.  It implemenmts an exponential backoff algorithm, if aprs.fi is offline."""
         failCount = 0
         while not self._stop_event.is_set(): # loop, unless stopped
             data = self.getPosition()
@@ -53,7 +57,7 @@ class APRS(threading.Thread):
                 if newTimestamp > self.lastTimestamp:
                     self.coord = newCoord
                     self.lastTimestamp = newTimestamp
-                    self.newData = True
+                    self.newData = True # TODO: Call the function which knwows what to do here, best practice would be to be able to set the function from the constructor
                 failCount = 0
                 time.sleep(90) # wait 90sec, aprs packets are not that frequent
             else: 
@@ -66,6 +70,7 @@ class APRS(threading.Thread):
                 time.sleep(int(86+np.pow(4,failCount))) # implement the exponential backoff, The intervals are 90sec, 102sec, 150sec, etc.
 
     def getPosition(self, tryAnyway=False):
+        """ This function calls the APRS API and querys the postion. It will return ([longitude, latitude], timestamp) or None, if the query fails."""
         if self.validated or tryAnyway:
             try:
                 params = {
