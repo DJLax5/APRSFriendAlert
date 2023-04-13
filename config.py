@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 import logging
+from ErrorEventHandler import ErrorHandler
 
 def loadConfiguration():
     load_dotenv()
@@ -23,6 +24,7 @@ def setupLogging():
     # Add the handlers to the logger
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
+    logger.addHandler(ErrorHandler())
     return logger
 
 

@@ -16,70 +16,62 @@ class OpenRouteService:
         self.key = os.getenv('OPEN_ROUTE_SERVICE_KEY')
         if self.key != None and self.key != '': # demo bounce the API to check it is working
             # Simply try to geocode "Berlin, Germany"
-            params = {
-                "api_key":self.key,
-                "text": "Berlin, Germany",
-                "size" : 1
-            }
-            try:
-                response = requests.get(self.GEOCODE_ENDPOINT, params)
-                if response.status_code != 200: # check for the correct error code
-                    cf.log.error('[ORS] ORS could not be validated! Server status code: ' + str(response.status_code))
-                    return
-                data = json.loads(response.text)
-                coord = data['features'][0]['geometry']['coordinates'] # if the conversion does not fail, we can be confident, that the response was valid
+            coord = self.geocode("Berlin, Germany", tryAnyway = True)
+            if coord != None:
                 self.validated = True
-                cf.log.info('[ORS] ORS validated. Result: ' + str(coord))
-            except Exception as e:
-                cf.log.error('[ORS] ORS could not be validated! Reason: ' + str(e))
+                cf.log.info('[ORS] ORS validated.')
+            else:
+                cf.log.critical('[ORS] Unable to validate the API Key!')
         else:
-            cf.log.error('[ORS] ORS Key is not set, cannot use ORS.')
+            cf.log.critical('[ORS] ORS Key is not set, cannot use ORS.')
 
     # Function to geocode a text to coordinates, returns a list of the coordinates, if valid, None otherwise
-    def geocode(self, text):
-        if self.validated: # check if the demo bounce was successfull
+    def geocode(self, text, tryAnyway = False):
+        if self.validated or tryAnyway: # check if the demo bounce was successfull
             params = {
                 "api_key":self.key,
                 "text": text,
                 "size" : 1
             }
             try:
-                response = requests.get(self.GEOCODE_ENDPOINT, params)
+                response = requests.get(self.GEOCODE_ENDPOINT, params, timeout=(5,15))
                 if response.status_code != 200:
                     cf.log.error('[ORS] Geocoding could failed! Server status code: ' + str(response.status_code))
                     return None
                 data = json.loads(response.text)
                 coord = data['features'][0]['geometry']['coordinates'] # extract the coordinates from the json response
-                cf.log.info("[ORS] Geocoding of " + text + " resulted in these coordinates: " + str(coord))
+                cf.log.debug("[ORS] Geocoding of " + text + " resulted in these coordinates: " + str(coord))
                 return coord
             except Exception as e:
                 cf.log.error('[ORS] Geocoding failed! Reason: ' + str(e))
                 return None
 
         else:
+            cf.log.warn('[ORS] Tried to geocode but ORS is not validated!')
             return None
 
 
     # Function to get the travel time between the coordinates start, dest. Returns a list of two numbers. the first is the distance in km the second the travel time in minutes
-    def getRouteSummary(self, start, dest):
-        if self.validated:
+    def getRouteSummary(self, start, dest, tryAnyway = False):
+        if self.validated or tryAnyway:
             try:
                 params = {
                     "api_key":self.key,
                     "start": str(start[0]) + ',' + str(start[1]),
                     "end" : str(dest[0]) + ',' + str(dest[1])
                 }
-                response = requests.get(self.ROUTE_CAR_ENDPOINT, params)
+                response = requests.get(self.ROUTE_CAR_ENDPOINT, params, timeout=(5,15))
                 if response.status_code != 200: # check server result
                     cf.log.error('[ORS] Route computation failed Server status code: ' + str(response.status_code))
                     return None
                 data = json.loads(response.text)
                 distance = float(data['features'][0]['properties']['summary']['distance'])/1000 # extract data, change the unit to km
                 time = float(data['features'][0]['properties']['summary']['duration'])/60 # extract date, change the unit to min
-                cf.log.info('[ORS] Route computed, it takes ' + str(np.round(time)) + ' min to travel ' + str(np.round(distance)) + ' km.') 
+                cf.log.debug('[ORS] Route computed, it takes ' + str(np.round(time)) + ' min to travel ' + str(np.round(distance)) + ' km.') 
                 return [distance, time]
             except Exception as e:
                 cf.log.error('[ORS] Route computation failed! Reason: ' + str(e))
                 return None
         else:
+            cf.log.warn('[ORS] Tried to getRouteSummary but ORS is not validated!')
             return None
