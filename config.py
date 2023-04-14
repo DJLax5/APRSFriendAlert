@@ -1,10 +1,34 @@
 import os
 from dotenv import load_dotenv
 import logging
-from ErrorEventHandler import ErrorHandler
+import json
 
 def loadConfiguration():
-    load_dotenv()
+    """ Function used to load the userdata"""
+    
+    # load the json data
+    try:
+        with open(os.getenv('CONFIG_FILE_PATH')) as f:
+            data = json.loads(f.read())
+        if data.get('CONTROL_CHATID') != None and data.get('USER_DATA') != None:
+            return data
+        else:
+            log.warn('[CONFIG] The user data is not present. If this is the first start of the bot, this is expected.')
+            return None
+    except Exception as e:
+        log.warn('[CONFIG] The user data is not present. If this is the first start of the bot, this is expected.')
+        return None
+            
+def saveConfiguration():
+    try:
+        data = {}
+        data['CONTROL_CHATID'] = MASTER_CHATID
+        data['USER_DATA'] = USER_DATA
+        with open(os.getenv('CONFIG_FILE_PATH'), 'w') as f:
+            f.write(json.dumps(data))
+        log.debug('[CONFIG] Configuration file written.')
+    except Exception as e:
+        log.error('[CONFIG] Writing data file failed. Reason: ' + str(e))
 
 def setupLogging():
     # Set up the logger with file and console handlers
@@ -24,11 +48,18 @@ def setupLogging():
     # Add the handlers to the logger
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
-    logger.addHandler(ErrorHandler())
     return logger
 
 
 # Run the confiuration, will be executed on first import, only once
-loadConfiguration()
+load_dotenv() # load the .env keys
 log = setupLogging()
-log.info('Sytsem Started, Configuration loaded!')
+data = loadConfiguration()
+if data == None:
+    MASTER_CHATID = ""
+    USER_DATA = {}
+else:
+    MASTER_CHATID = data['CONTROL_CHATID']
+    USER_DATA = data['USER_DATA']
+del data # free up namespace
+log.info('[CONFIG] Sytsem Started, Configuration loaded!')

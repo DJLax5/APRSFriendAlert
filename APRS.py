@@ -8,11 +8,13 @@ import numpy as np
 
 class APRS(threading.Thread):
 
-    def __init__(self):
+    def __init__(self, newDataHandler):
         """ Constructor for the APRS API Object. It reads the key and Call from the .env file an tries to test the connection. """
 
         # As this is a child class, execute the parent constructor
         super().__init__()
+
+        self.newDataHandler = newDataHandler
         self._stop_event = threading.Event()
 
         # Define the APRS URL
@@ -25,7 +27,6 @@ class APRS(threading.Thread):
 
         self.coord = [0.0, 0.0]
         self.lastTimestamp = 0
-        self.newData = False
 
         # check the correctness of the set data
         self.validated = False
@@ -57,7 +58,7 @@ class APRS(threading.Thread):
                 if newTimestamp > self.lastTimestamp:
                     self.coord = newCoord
                     self.lastTimestamp = newTimestamp
-                    self.newData = True # TODO: Call the function which knwows what to do here, best practice would be to be able to set the function from the constructor
+                    self.newDataHandler(self.coord) # Call the new Data Handler with the new coordinates
                 failCount = 0
                 time.sleep(90) # wait 90sec, aprs packets are not that frequent
             else: 
