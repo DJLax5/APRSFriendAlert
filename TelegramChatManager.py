@@ -43,7 +43,7 @@ class TelegramChatManager:
         if chatID == None or chatID == '':
             return
         async def send_message(self, chatID, message):
-            await self.bot.send_message(chat_id=chatID, text=message)
+            await self.bot.send_message(chat_id=chatID, text=message, parse_mode='MarkdownV2')
 
         # call the asynchronous function using asyncio.run()
         asyncio.run(send_message(self, chatID, message))

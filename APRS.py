@@ -16,7 +16,7 @@ class APRS(threading.Thread):
 
         self.newDataHandler = newDataHandler
         self._stop_event = threading.Event()
-
+        self._restarted_event = threading.Event()
         # Define the APRS URL
         self.APRS_ENDPOINT = "https://api.aprs.fi/api/get"
 
@@ -46,10 +46,14 @@ class APRS(threading.Thread):
     def stop(self):
         """ Stops the thread. To peacfully exit the infiite loop"""
         self._stop_event.set()
+    def restart(self):
+        """ Restarts the thread if it was stopped and started inbetween one waiting cycle"""
+        self._restarted_event.set()
 
     def run(self): 
         """ This is the entry point for the loop. It will start to query APRS.fi and get the position.  It implemenmts an exponential backoff algorithm, if aprs.fi is offline."""
         failCount = 0
+        self.lastTimestamp = int(time.time()) # the thread has started, waint for the next incoming packet to be seen as "new"
         while not self._stop_event.is_set(): # loop, unless stopped
             data = self.getPosition()
             if data != None:
@@ -69,6 +73,10 @@ class APRS(threading.Thread):
                     self.stop()
                     return
                 time.sleep(int(86+np.pow(4,failCount))) # implement the exponential backoff, The intervals are 90sec, 102sec, 150sec, etc.
+            
+            if self._restarted_event.is_set(): # this thread could be stopped and started while we were waiting in the sleep loop. 
+                self._restarted_event.clear()
+                self._stop_event.clear()
 
     def getPosition(self, tryAnyway=False):
         """ This function calls the APRS API and querys the postion. It will return ([longitude, latitude], timestamp) or None, if the query fails."""
