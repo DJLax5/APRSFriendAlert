@@ -5,6 +5,7 @@ from TelegramChatManager import TelegramChatManager
 import logging
 import os
 import numpy as np
+from time import sleep
 
 
 class APRSFriendAlert:
@@ -86,7 +87,7 @@ class APRSFriendAlert:
                 # Ok now send the messages
                 self.tcm.sendMessage(cf.MASTER_CHATID, 'EN-ROUTE!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is now beeing followed. Your route is ' + str(distance) + ' km long and will take ' + timeStr + '.\nYou can cancel this, by the /quit command.')
                 for alertee in self.alertees:
-                    self.tcm.sendMessage(alertee, 'Great!\n'+ os.getenv('APRS_FOLLOW_CALL') + 'is on its way to you!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.'  )
+                    self.tcm.sendMessage(alertee, 'Great!\n'+ os.getenv('APRS_FOLLOW_CALL') + ' is on its way to you!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.'  )
                 cf.log.debug('Follow Process is started, first packet arrived successfully!')
 
             else:
@@ -95,7 +96,7 @@ class APRSFriendAlert:
                 nextAlertIx = np.where(self.alertState)[0][-1] + 1 
 
                 # now check if the next time falls below the alert threshold
-                if round(time) <= self.ALERT_TIMES(nextAlertIx):
+                if round(time) <= self.ALERT_TIMES[nextAlertIx]:
                     message = ''
                     self.alertState[nextAlertIx] = True # set the flag
                     if self.ALERT_TIMES(nextAlertIx) == self.ALERT_TIMES[-1]: # are we there yet?
@@ -120,16 +121,14 @@ class APRSFriendAlert:
             self.dest = None
             self.alertees = None
             self.alertState = [False, False, False, False, False, False]
-            cf.log.info('[ADA] Quitting following process.')    
+            cf.log.info('[AFA] Quitting following process.')    
         else:
             self.dest = dest
-            self.alerts = alertees
+            self.alertees = alertees
             self.following = True
             self.alertState = [False, False, False, False, False, False]
-            try:
-                self.aprs.start()
-            except Exception as e:
-                self.aprs.restart()
+            self.aprs.start()
+
 
             cf.log.info('[AFA] New following process initiated.')
 
@@ -141,6 +140,7 @@ class APRSFriendAlert:
 if __name__ == '__main__':
     afa = APRSFriendAlert()
     afa.main()
+    afa.aprs.stop()
     cf.log.info('[AFA] System shutting down.')
     #tcm = TelegramChatManager(None, None)
     #distance = 2300

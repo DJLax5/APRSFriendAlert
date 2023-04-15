@@ -13,6 +13,7 @@ from telegram.ext import (
 )
 from typing import Dict
 import asyncio
+import re
 
 CONFIG_BOT, GET_NAME = range(2)
 GET_ADDR_NAME, GET_ADDR, CHECK_ADDR = range(3)
@@ -46,17 +47,10 @@ class TelegramChatManager:
             },
             fallbacks=[CommandHandler("quit", self.handleQuit)]
         )
-        convRmAddrHandler = ConversationHandler(
-            entry_points=[CommandHandler("rmaddress", self.handleRmAddress)],
-            states={
-            SEL_RM_ADDR:[MessageHandler(filters.TEXT & ~filters.COMMAND, self.handlerSelRmAddr)],
-            },
-            fallbacks=[CommandHandler("quit", self.handleQuit)]
-        )
+
 
         self.app.add_handler(convStartHandler)
         self.app.add_handler(convAddAddrHandler)
-        self.app.add_handler(convRmAddrHandler)
         
         self.app.add_handler(CommandHandler("help", self.handleHelp))
         self.app.add_handler(CommandHandler("takeover", self.handleTakeover))
@@ -65,6 +59,7 @@ class TelegramChatManager:
         self.app.add_handler(CommandHandler("chname", self.handleChName))
         self.app.add_handler(CommandHandler("verify", self.handleVerify))
         self.app.add_handler(CommandHandler("rmuser", self.handleRMuser))
+        self.app.add_handler(CommandHandler("rmaddress", self.handleRmAddress))
         
         # on non command i.e message
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handleMessage))
@@ -86,16 +81,25 @@ class TelegramChatManager:
             try:
                 await self.bot.send_message(chat_id=chatID, text=message, parse_mode='MarkdownV2')
             except telegram.error.BadRequest as e:
-                cf.log.warn('[TCM] The message could not be sent. ChatID is wrong.')
+                cf.log.warn('[TCM] The message could not be sent. Reason: ' + str(e))
 
         # call the asynchronous function using asyncio.run().
+        # If anyone can get it to work otherwise, please do so. can't getz Multithreading and asnyio to work together.. 
         # It will fail, if we are already within a subroutine. then use ensure_future.
         with warnings.catch_warnings(): # disable the warning, we want to catch
             warnings.filterwarnings("ignore", message="coroutine 'TelegramChatManager.sendMessage.<locals>.send_message' was never awaited")
             try:
                 asyncio.run(send_message(self, chatID, message))
             except:
-                asyncio.ensure_future(send_message(self, chatID, message))
+                with warnings.catch_warnings(): # disable the warning, we want to catch
+                    warnings.filterwarnings("ignore", message="Enable tracemalloc to get the object allocation traceback")
+                    try:
+                        asyncio.ensure_future(send_message(self, chatID, message))
+                    except:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        asyncio.run(send_message(self, chatID, message))
+
 
     # Define a few command/conversation handlers. These usually take the two arguments update and
     # context.
@@ -224,10 +228,64 @@ class TelegramChatManager:
         
     async def handleRmAddress(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Start the remove address conversation after the /rmaddress command"""
-        cf.log.error('[TCM] Sorry this command is not implemented yet. (handleRmAddress)')
-    async def handlerSelRmAddr(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """ Here we check which address to remove """
-        cf.log.error('[TCM] Sorry this command is not implemented yet. (handlerSelRmAddr)')
+        chatid = str(update.message.chat_id)
+        if await self.sanityCheck(update):
+            if chatid == cf.MASTER_CHATID:
+                if context.args == []:
+                    message = telegram.helpers.escape_markdown('Syntax for this command is /rmaddress [USERNAME] [ID] where [ID] is the number of the address you want to remove. To see that number use /show.',version = 2)
+                    await update.message.reply_text(message, parse_mode='MarkdownV2')
+                    return
+                try:
+                    name = " ".join(context.args[0:-1])
+                    ix = int(context.args[-1]) -1
+                    id = self.getIDbyName(name)
+                    if id == None:
+                        message = telegram.helpers.escape_markdown('Sorry, there is no user named ' + name,version = 2)
+                        await update.message.reply_text(message, parse_mode='MarkdownV2')
+                        return
+                    if len(id) > 1:
+                        message = telegram.helpers.escape_markdown('Sorry, there are multiple user named ' + name + '. During development, this has been seen as possible, but intentionally ignored. Please notify the users to change their name to something unique. Use /chname for that.',version = 2)
+                        await update.message.reply_text(message, parse_mode='MarkdownV2')
+                        cf.log.warn('[TCM] There are multiple user named ' + name +'. Cannot identify the user to remove the address.')
+                        return
+                    id = id[0]
+                    if ix >= len(cf.USER_DATA[id]['ADDRESSES']):
+                        message = telegram.helpers.escape_markdown('Sorry, there is no address with ID ' + str(ix+1), version = 2)
+                        await update.message.reply_text(message, parse_mode='MarkdownV2')
+                        return
+                    
+                    message = telegram.helpers.escape_markdown('Address ' + cf.USER_DATA[id]['ADDRESSES'][ix]['ADDR_NAME'] + ' deleted.', version = 2)
+                    await update.message.reply_text(message, parse_mode='MarkdownV2')
+
+                    cf.USER_DATA[id]['ADDRESSES'].pop(ix)
+                    cf.saveConfiguration()
+
+                except:
+                    message = telegram.helpers.escape_markdown('Sorry I could not get what you were saying. The Syntax for this command is /rmaddress [USERNAME] [ID] where [ID] is the number of the address you want to remove. To see that number use /show.', version = 2)
+                    await update.message.reply_text(message, parse_mode='MarkdownV2')
+
+            else:   
+                if context.args == []:
+                    message = telegram.helpers.escape_markdown('Syntax for this command is /rmaddress [ID] where [ID] is the number of the address you want to remove. To see that number use /show.',version = 2)
+                    await update.message.reply_text(message, parse_mode='MarkdownV2')
+                    return
+                try:
+                    ix = int(context.args[0]) - 1
+                    if ix >= len(cf.USER_DATA[chatid]['ADDRESSES']):
+                        message = telegram.helpers.escape_markdown('Sorry, there is no address with ID ' + str(ix+1), version = 2)
+                        await update.message.reply_text(message, parse_mode='MarkdownV2')
+                        return
+                    message = telegram.helpers.escape_markdown('Address ' + cf.USER_DATA[chatid]['ADDRESSES'][ix]['ADDR_NAME'] + ' deleted.', version = 2)
+                    await update.message.reply_text(message, parse_mode='MarkdownV2')
+
+                    cf.USER_DATA[chatid]['ADDRESSES'].pop(ix)
+                    cf.saveConfiguration()
+                except:
+                    message = telegram.helpers.escape_markdown('Sorry I could not get what you were saying. The Syntax for this command is /rmaddress [ID] where [ID] is the number of the address you want to remove. To see that number use /show.', version = 2)
+                    await update.message.reply_text(message, parse_mode='MarkdownV2')
+
+
+
 
     async def handleShAddress(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Send a message when the command /show is issued."""
@@ -236,9 +294,7 @@ class TelegramChatManager:
             msg = ''
             if chatid == cf.MASTER_CHATID:
                 msg = 'As you are the owner of this bot, you will see all stored data. \nUsers will only see the addresses they have added.\n\n'
-                j = 1
                 for userid in cf.USER_DATA.keys():
-                    msg = msg + str(j) + '.\n'
                     msg = msg + 'USER: ' + cf.USER_DATA[userid]['NAME'] + '\n'
                     if not cf.USER_DATA[userid]['VALID']:
                         msg = msg + 'Not verified.\n\n'
@@ -246,7 +302,6 @@ class TelegramChatManager:
                         msg = msg + 'No addresses defined!\n\n'
                     else:
                         msg = msg + self.getAddressesStr(userid)
-                    j = j + 1
             else:
                 if cf.USER_DATA[chatid]['ADDRESSES'] == []:
                     msg = 'Here are your stored addresses: \n\n'
@@ -259,8 +314,29 @@ class TelegramChatManager:
 
     async def handleHelp(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Send a message when the command /help is issued."""
-        cf.log.error('[TCM] Sorry this command is not implemented yet. (handleHelp)')
-
+        chatid = str(update.message.chat_id)
+        if await self.sanityCheck(update):
+            msg = 'Here is a list of commands:\nAttributes with [ ] are mandatory, attributes with { } are optional. \n\n'
+            msg += '/help \t- displays this help message \n'
+            msg += '/takeover [KEY] \t- If you are the owner of this bot, you can make this chat the control chat using the setup Key \n'
+            msg += '/show \t- displays all stored data \n'
+            msg += '/chname [NEWNAME] \t- changes your name  \n'
+            msg += '/quit \t- stops the current conversation / background process \n'
+            msg += '/addaddress {NAME} \t- Allows you to define addresses as destination \n' 
+            if chatid != cf.MASTER_CHATID:
+                msg += '/rmaddress [ID] \t- Allows you to remove the address with the specified ID \n' 
+            else:
+                msg += '/rmaddress [NAME] [ID] \t- Allows you to remove the address with the specified ID from the specified user \n' 
+                msg += '\nHere are the special control commands:\n'
+                msg += '/rmuser [NAME] \t- deletes the user\n'
+                msg += '/verify [NAME] \t- verifys the user so they can use this bot\n'
+                msg += '\n'
+                msg += 'To start the APRS follow process, use:\n'
+                msg += 'en route to [NAME] {alert [USER-NAME]} \n'
+                msg += '[NAME] can be either a username (if they have only one address defined) or an address name. You can alert multiple users by seperating them by comma. If the \'alert\' tag is specified, the owner of the address is not notified by default.\n'
+            msg += '\nHave fun!'
+            message = telegram.helpers.escape_markdown(msg, version= 2)
+            await update.message.reply_text(message, parse_mode='MarkdownV2')
 
     async def handleMessage(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """ The default message handler. Whenever a simple message is sent outside of a conversation."""
@@ -268,11 +344,106 @@ class TelegramChatManager:
         if await self.sanityCheck(update):
 
             if chatid == cf.MASTER_CHATID:
-                if update.message.text.strip().lower().startswith("en-route to") or update.message.text.strip().lower().startswith("en route to") or update.message.text.strip().lower().startswith("enroute to"):
-                    message = telegram.helpers.escape_markdown('The string syntax is not yet implemented.',version = 2)
+                if self.newRoute == None:
+                    cf.log.critical('[TCM] The callback for new routes is not set, stopping here!')
+                    return
+
+                if context.user_data.get('FOLLOW_MULTIPLE_USERS') and context.user_data['FOLLOW_MULTIPLE_USERS'] == True:
+                    context.user_data['FOLLOW_MULTIPLE_USERS'] == False
+                    try:
+                        new_ix = int(update.message.text) - 1
+                        destID = context.user_data['FOLLOW_USERS'][new_ix]
+                        coords = cf.USER_DATA[destID]['ADDRESSES'][context.user_data['FOLLOW_IXS'][new_ix]][coords]
+                        if context.user_data['FOLLOW_ALERTEES'] == '':
+                            alertees = [destID]
+                        else: 
+                            for alertee in alertee_names:
+                                destID = self.getIDbyName(alertee)
+                                if destID != None:
+                                    alertees = alertees + destID
+                            if len(alertee_names) > len(alertees):
+                                message = telegram.helpers.escape_markdown('Couldn\'t find all the users you requested! Please try again, I won\'t do anything.',version = 2)
+                                await update.message.reply_text(message, parse_mode='MarkdownV2')
+                                return
+                        self.newRoute(coords, alertees)
+                        message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data is beeing tracked.',version = 2)
+                        await update.message.reply_text(message, parse_mode='MarkdownV2')
+                        return
+                    except:
+                        context.user_data['FOLLOW_MULTIPLE_USERS'] = True
+                        message = telegram.helpers.escape_markdown('Sorry couldn\'t parse your digit. Please only respond with the single digit infront of the user.',version = 2)
+                        await update.message.reply_text(message, parse_mode='MarkdownV2')
+                        return
+
+
+
+
+                pattern = r"^(en.?route to|enroute to) (.+?)(?: alert ((?:[^,]+(?:, )?)+))?$"
+                match = re.match(pattern, update.message.text)
+                if match:
+                    
+                    name = match.group(2)
+                    # first try to fine the user with that 
+                    ids = self.getIDbyName(name)
+                    destID = None
+                    coords = None
+                    alertees = []
+                    msg = ''
+                    if ids == None:
+                        users, ix = self.getIDbyAddrName(name)
+                        if len(users) > 1:
+                            msg = 'Multiple users have defined a address called ' + name 
+                            msg += '\n'
+                            for i in range(len(users)):
+                                msg+= str(i+1) + '. ' + cf.USER_DATA[users[i]]['NAME'] + '\n'
+                            msg += '\nPlease respond just with the number infront of the user you want to select.'
+
+                            context.user_data['FOLLOW_MULTIPLE_USERS'] = True
+                            context.user_data['FOLLOW_USERS'] = users
+                            context.user_data['FOLLOW_IXS'] = ix
+                            context.user_data['FOLLOW_ALERTEES'] = match.group(3) if match.group(3) else ''
+
+                            message = telegram.helpers.escape_markdown(msg,version = 2)
+                            await update.message.reply_text(message, parse_mode='MarkdownV2')
+                            return
+                        elif len(users) == 1:
+                            destID = users[0]
+                            coords = cf.USER_DATA[destID]['ADDRESSES'][ix[0]]['COORDS']
+                        else:
+                            message = telegram.helpers.escape_markdown('Couldn\'t find user or address ' + name,version = 2)
+                            await update.message.reply_text(message, parse_mode='MarkdownV2')
+                            return
+                    else:
+                        if len(ids) > 1:
+                            message = telegram.helpers.escape_markdown('There are multiple users called ' + name + '. During development, this has been seen as possible, but intentionally ignored. Please notify the users to change their name to something unique. Use /chname for that.',version = 2)
+                            await update.message.reply_text(message, parse_mode='MarkdownV2')
+                            return
+                        ids = ids[0]
+                        if len(cf.USER_DATA[ids]['ADDRESSES']) != 1:
+                            message = telegram.helpers.escape_markdown('User ' + name + ' has not exactly one address defined. Use the en-route command with the address name instread.',version = 2)
+                            await update.message.reply_text(message, parse_mode='MarkdownV2')
+                            return
+                        destID = ids
+                        coords = cf.USER_DATA[destID]['ADDRESSES'][0]['COORDS']
+                            
+                    alertee_names = match.group(3).split(", ") if match.group(3) else []
+                    if alertee_names == []:
+                        alertees.append(destID)
+                    else:
+                        for alertee in alertee_names:
+                            destID = self.getIDbyName(alertee)
+                            if destID != None:
+                                alertees = alertees + destID
+                        if len(alertee_names) > len(alertees):
+                            message = telegram.helpers.escape_markdown('Couldn\'t find all the users you requested! Please try again, I won\'t do anything.',version = 2)
+                            await update.message.reply_text(message, parse_mode='MarkdownV2')
+                            return
+                    self.newRoute(coords, alertees)
+                    message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data beeing tracked.',version = 2)
                     await update.message.reply_text(message, parse_mode='MarkdownV2')
+
                 else:
-                    message = telegram.helpers.escape_markdown('To activate the following process, pleas start your command with \'en route to\' \nSee /help to see all possible commands.',version = 2)
+                    message = telegram.helpers.escape_markdown('Couldn\'t parese your message. To activate the following process, pleas start your command with \'en route to\' \nSee /help to see all possible commands.',version = 2)
                     await update.message.reply_text(message, parse_mode='MarkdownV2')
             else:
                 message = telegram.helpers.escape_markdown('Please see /help to see all possible commands.',version = 2)
@@ -313,6 +484,10 @@ class TelegramChatManager:
         """ Handle to Quit command."""
         message = telegram.helpers.escape_markdown('Process aborted.', version= 2)
         await update.message.reply_text(message, parse_mode='MarkdownV2')
+        chatid = str(update.message.chat_id)
+        if chatid == cf.MASTER_CHATID:
+            self.newRoute(None, None)
+            context.user_data['FOLLOW_MULTIPLE_USERS'] = False
         return ConversationHandler.END
 
     async def handleChName(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -345,7 +520,7 @@ class TelegramChatManager:
             ci = self.getIDbyName(name)
             if ci != None:
                     if len(ci) > 1:
-                        message = telegram.helpers.escape_markdown('There are multiple users named ' + cf.USER_DATA[ci]['NAME'] + '. During development, this has been seen possible, but intentionally ignored. Please notify the users to change their name to something unique. Use /chname for that.',version = 2)
+                        message = telegram.helpers.escape_markdown('There are multiple users named ' + cf.USER_DATA[ci]['NAME'] + '. During development, this has been seen as possible, but intentionally ignored. Please notify the users to change their name to something unique. Use /chname for that.',version = 2)
                         await update.message.reply_text(message, parse_mode='MarkdownV2')
                         cf.log.warn('[TCM] Cannot verify user by name, there are multiple users with the same name.')
                         return
@@ -425,10 +600,10 @@ class TelegramChatManager:
     def getAddressesStr(self, userid):
         msg = ''
         for i in range(len(cf.USER_DATA[userid]['ADDRESSES'])):
-            msg = msg + str(i+1) + '.\n'
+            msg = msg + str(i+1) + ':\n'
             msg = msg + cf.USER_DATA[userid]['ADDRESSES'][i]['ADDR_NAME'] + '\n'
             msg = msg + cf.USER_DATA[userid]['ADDRESSES'][i]['ADDR'] + '\n'
-            msg = msg + str(cf.USER_DATA[userid]['ADDRESSES'][i]['COORDS'][1]) + ', ' + str(cf.USER_DATA[userid]['ADDRESSES'][i]['COORDS'][1]) + '\n\n'
+            msg = msg + str(cf.USER_DATA[userid]['ADDRESSES'][i]['COORDS'][1]) + ', ' + str(cf.USER_DATA[userid]['ADDRESSES'][i]['COORDS'][0]) + '\n\n'
         return msg
     
     def getIDbyName(self, name):
