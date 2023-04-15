@@ -61,5 +61,6 @@ if data == None:
 else:
     MASTER_CHATID = data['CONTROL_CHATID']
     USER_DATA = data['USER_DATA']
+    log.debug(USER_DATA)
 del data # free up namespace
 log.info('[CONFIG] Sytsem Started, Configuration loaded!')

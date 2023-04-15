@@ -39,7 +39,7 @@ class APRSFriendAlert:
         # Setup the API Bouncers 
         self.ors = OpenRouteService()
         self.aprs = APRS(self.newAPRSData)
-        self.tcm = TelegramChatManager(self.routeUpdate(), self.ors.geocode)
+        self.tcm = TelegramChatManager(self.routeUpdate, self.ors.geocode)
         cf.log.addHandler(self.ErrorHandler(self)) # now add the telegram error handler
         
     def main(self):
@@ -79,13 +79,14 @@ class APRSFriendAlert:
                 self.alertState[1:] = [round(time) <= alert_time for alert_time in self.ALERT_TIMES[1:]] # set all flags for longer times. This route will not need every alert
 
                 if all(self.alertState): # we've arrived at the desitination already!?
-                    self.tcm.sendMessage(cf.MASTER_CHATID, 'OOPS! It seems you\'re already at your destination! I won\'t do anything further.')
+                    self.tcm.sendMessage(cf.MASTER_CHATID, 'OOPS! \nIt seems you\'re already at your destination! I won\'t do anything further.')
                     self.aprs.stop()
+                    self.following = False
                     return
                 # Ok now send the messages
-                self.tcm.sendMessage(cf.MASTER_CHATID, 'EN-ROUTE!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is now beeing followed. Your route is ' + distance + ' km long and will take ' + timeStr + '.\nYou can cancel this, by the \quit command.')
+                self.tcm.sendMessage(cf.MASTER_CHATID, 'EN-ROUTE!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is now beeing followed. Your route is ' + str(distance) + ' km long and will take ' + timeStr + '.\nYou can cancel this, by the /quit command.')
                 for alertee in self.alertees:
-                    self.tcm.sendMessage(alertee, 'Great!\n'+ os.getenv('APRS_FOLLOW_CALL') + 'is on its way to you!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + distance + ' km and ' + timeStr + 'away.'  )
+                    self.tcm.sendMessage(alertee, 'Great!\n'+ os.getenv('APRS_FOLLOW_CALL') + 'is on its way to you!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.'  )
                 cf.log.debug('Follow Process is started, first packet arrived successfully!')
 
             else:
@@ -98,11 +99,12 @@ class APRSFriendAlert:
                     message = ''
                     self.alertState[nextAlertIx] = True # set the flag
                     if self.ALERT_TIMES(nextAlertIx) == self.ALERT_TIMES[-1]: # are we there yet?
-                        message = '\u00128680 ' + os.getenv('APRS_FOLLOW_CALL') + ' arrived! \u00128680'
+                        message = '\U0001F6A8 ' + os.getenv('APRS_FOLLOW_CALL') + ' arrived! \U0001F6A8'
                         self.tcm(cf.MASTER_CHATID, 'You\'ve arrived at your destination.')
                         self.aprs.stop()
+                        self.following = False
                     else:
-                        message = os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + distance + ' km and ' + timeStr + 'away.'
+                        message = os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.'
                     
                     # message is built, send it 
                     for alertee in self.alertees:
@@ -137,7 +139,10 @@ class APRSFriendAlert:
 
 
 if __name__ == '__main__':
-    cf.MASTER_CHATID = '402776996'
     afa = APRSFriendAlert()
     afa.main()
     cf.log.info('[AFA] System shutting down.')
+    #tcm = TelegramChatManager(None, None)
+    #distance = 2300
+    #timeStr = APRSFriendAlert.getTimeStr(63)
+    #tcm.sendMessage(cf.MASTER_CHATID, 'OOPS! It seems you\'re already at your destination! I won\'t do anything further.' )

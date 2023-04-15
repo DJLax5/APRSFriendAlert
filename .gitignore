@@ -162,5 +162,5 @@ cython_debug/
 
 # The files created by the APRS Bot are not to be committed
 aprsBot.log
-aprsBotData.xml
+aprsBotData.json
 
