@@ -16,7 +16,10 @@ To use this bot, rename the dotenv.txt file to .env and setup the file. You'll n
 The rest can be left as-is.
 
 You can run this in a Docker container. For that use:
+
+
 `docker build -t aprsfriendalert .`
+
 `docker run -d -v /absoulte/path/to/this/repo:/usr/src/app aprsfriendalert`
 
 There is no warranty whatsoever.
