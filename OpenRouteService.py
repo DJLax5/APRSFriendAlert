@@ -70,7 +70,7 @@ class OpenRouteService:
                 data = json.loads(response.text)
                 distance = float(data['features'][0]['properties']['summary']['distance'])/1000 # extract data, change the unit to km
                 time = float(data['features'][0]['properties']['summary']['duration'])/60 # extract date, change the unit to min
-                cf.log.debug('[ORS] Route computed, it takes ' + str(np.round(time)) + ' min to travel ' + str(np.round(distance)) + ' km.') 
+                cf.log.debug('[ORS] Route computed, it takes ' + str(int(np.round(time))) + ' min to travel ' + str(np.round(distance,1)) + ' km.') 
                 return [distance, time]
             except Exception as e:
                 cf.log.error('[ORS] Route computation failed! Reason: ' + str(e))

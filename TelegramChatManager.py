@@ -68,6 +68,8 @@ class TelegramChatManager:
         # store the callback functions
         self.newRoute = newRouteCallback
         self.geocode = geocodeCallback
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
 
     def execTCM(self):
         """This function will start the polling process of the Telegram bot. This function will not return."""
@@ -85,22 +87,8 @@ class TelegramChatManager:
             except telegram.error.BadRequest as e:
                 cf.log.warn('[TCM] The message could not be sent. Reason: ' + str(e))
 
-        # call the asynchronous function using asyncio.run().
-        # If anyone can get it to work otherwise, please do so. can't getz Multithreading and asnyio to work together.. 
-        # It will fail, if we are already within a subroutine. then use ensure_future.
-        with warnings.catch_warnings(): # disable the warning, we want to catch
-            warnings.filterwarnings("ignore", message="coroutine 'TelegramChatManager.sendMessage.<locals>.send_message' was never awaited")
-            try:
-                asyncio.run(send_message(self, chatID, message))
-            except:
-                with warnings.catch_warnings(): # disable the warning, we want to catch
-                    warnings.filterwarnings("ignore", message="Enable tracemalloc to get the object allocation traceback")
-                    try:
-                        asyncio.ensure_future(send_message(self, chatID, message))
-                    except:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        asyncio.run(send_message(self, chatID, message))
+        asyncio.set_event_loop(self._loop)
+        asyncio.ensure_future(send_message(self, chatID, message))
 
 
     # Define a few command/conversation handlers. These usually take the two arguments update and
@@ -388,7 +376,7 @@ class TelegramChatManager:
                     return
                 
                 # first, check if the enroute command is detected
-                pattern = r"^(en.?route to|enroute to) (.+?)(?: alert ((?:[^,]+(?:, )?)+))?$"
+                pattern = r"(?i)^(en.?route to|enroute to) (.+?)(?: alert ((?:[^,]+(?:, )?)+))?$"
                 match = re.match(pattern, update.message.text)
                 if match: # yes, the string matches the regex                    
                     name = match.group(2) # get the nam 
@@ -453,9 +441,9 @@ class TelegramChatManager:
                             await update.message.reply_text(message, parse_mode='MarkdownV2')
                             return
                     self.newRoute(coords, alertees) # message parsed successfully
-                    message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data beeing tracked.',version = 2)
+                    message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data beeing tracked.\nType /quit to abort.',version = 2)
                     await update.message.reply_text(message, parse_mode='MarkdownV2')
-                    cf.log.info('[TCM] Suceccfully parsed message ' + update.message.text)
+                    cf.log.info('[TCM] Successfully parsed message ' + update.message.text)
 
                 # regex does not match, but matched once bevor, get the address ID we found
                 elif context.user_data.get('FOLLOW_MULTIPLE_USERS') and context.user_data['FOLLOW_MULTIPLE_USERS'] == True:

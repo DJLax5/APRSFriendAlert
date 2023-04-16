@@ -1,6 +1,8 @@
 import config as cf
 from OpenRouteService import OpenRouteService
 from APRS import APRS
+from tests.dummyAPRS import dummyAPRS
+
 from TelegramChatManager import TelegramChatManager
 import logging
 import os
@@ -28,7 +30,7 @@ class APRSFriendAlert:
             """ The function which is called on each logging event, pushes the errors and worse to telegram"""
             if record.levelno >= self.level: # record passt the threshold
                 try:
-                    self.messageCallback(cf.MASTER_CHATID,'LOGGING EVENT:\n[' + record.levelname + '] ' + record.message)
+                    self.messageCallback(cf.MASTER_CHATID,'\0001F6A7 LOGGING EVENT \0001F6A7\n[' + record.levelname + '] ' + record.message)
                 except: # this exception is not needed, the error is logged anyways
                     pass
     
@@ -40,12 +42,12 @@ class APRSFriendAlert:
         self.following = False
         self.dest = None
         self.alertees = None
-        self.ALERT_TIMES = [-1, 60, 30, 15, 5, 2] # the intervals during which the alertees are alerted. -1 means the inital away time, regardless of how far that is
+        self.ALERT_TIMES = [-1, 60, 30, 15, 5, 3] # the intervals during which the alertees are alerted. -1 means the inital away time, regardless of how far that is
         self.alertState = [False, False, False, False, False, False]
 
         # Setup the API Bouncers 
         self.ors = OpenRouteService()
-        self.aprs = APRS(self.newAPRSData)
+        self.aprs = dummyAPRS(self.newAPRSData) # If you want to test: dummyAPRS(self.newAPRSDATA)
         self.tcm = TelegramChatManager(self.routeUpdate, self.ors.geocode)
         cf.log.addHandler(self.ErrorHandler(self.tcm.sendMessage, os.getenv('TELEGRAM_LOGGING_LEVEL'))) # now add the telegram error handler
         
@@ -76,7 +78,7 @@ class APRSFriendAlert:
         response = self.ors.getRouteSummary(coords, self.dest) 
         if response != None:
             # extract the distance and time 
-            distance = np.round(response[0])
+            distance = np.round(response[0],1)
             time = response[1]
             timeStr = APRSFriendAlert.getTimeStr(time)
 
@@ -86,40 +88,39 @@ class APRSFriendAlert:
                 self.alertState[1:] = [round(time) <= alert_time for alert_time in self.ALERT_TIMES[1:]] # set all flags for longer times. This route will not need every alert
 
                 if all(self.alertState): # we've arrived at the desitination already!?
-                    self.tcm.sendMessage(cf.MASTER_CHATID, 'OOPS! \nIt seems you\'re already at your destination! I won\'t do anything further.')
+                    self.tcm.sendMessage(cf.MASTER_CHATID, 'OOPS! \nIt seems you\'re already at your destination \U0001F3C1 \nI won\'t do anything further.')
                     self.aprs.stop()
                     self.following = False
                     return
                 # Ok now send the messages
-                self.tcm.sendMessage(cf.MASTER_CHATID, 'EN-ROUTE!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is now beeing followed. Your route is ' + str(distance) + ' km long and will take ' + timeStr + '.\nYou can cancel this, by the /quit command.')
+                self.tcm.sendMessage(cf.MASTER_CHATID, '\U0001F698 EN-ROUTE \U0001F698 \n' + os.getenv('APRS_FOLLOW_CALL') + ' is now beeing followed. Your route is ' + str(distance) + ' km long and will take ' + timeStr + '.')
                 for alertee in self.alertees:
-                    self.tcm.sendMessage(alertee, 'Great!\n'+ os.getenv('APRS_FOLLOW_CALL') + ' is on its way to you!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.'  )
+                    self.tcm.sendMessage(alertee, 'Great! \U0001F698\n'+ os.getenv('APRS_FOLLOW_CALL') + ' is on its way to you!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.'  )
                 cf.log.info('Follow Process is started, first packet arrived successfully!')
 
             else:
                 # now get the next index of the time we have to wait for. 
                 # if the self.alertState is [True, True, False, False, False] nextAlertIx will be 2
                 nextAlertIx = np.where(self.alertState)[0][-1] + 1 
-
                 # now check if the next time falls below the alert threshold
                 if round(time) <= self.ALERT_TIMES[nextAlertIx]:
                     message = ''
-                    self.alertState[nextAlertIx] = True # set the flag
-                    if self.ALERT_TIMES(nextAlertIx) == self.ALERT_TIMES[-1]: # are we there yet?
-                        message = '\U0001F6A8 ' + os.getenv('APRS_FOLLOW_CALL') + ' arrived! \U0001F6A8'
-                        self.tcm(cf.MASTER_CHATID, 'You\'ve arrived at your destination.')
+                    self.alertState[1:] = [round(time) <= alert_time for alert_time in self.ALERT_TIMES[1:]] # set the flag(s) if we skipped a alert
+                    if all(self.alertState): # are we there yet?
+                        message = '\U0001F6A8 ' + os.getenv('APRS_FOLLOW_CALL') + ' arrived! \U0001F3C1'
+                        self.tcm.sendMessage(cf.MASTER_CHATID, 'You\'ve arrived at your destination! \U0001F3C1')
                         self.aprs.stop()
                         self.following = False
                         cf.log.info('[AFA] You have arrived at your desitination. Stopping processes...')
                     else:
-                        message = os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.'
+                        message = '\U0001F697 ' + os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.'
                     
                     # message is built, send it 
                     for alertee in self.alertees:
                         self.tcm.sendMessage(alertee, message)
                     cf.log.debug('[AFA] Messages have been set. Time to destination ' + timeStr)
                 else:
-                    cf.log.debug('[AFA] Nobody to notiify. Time to destination ' + timeStr)
+                    cf.log.debug('[AFA] Nobody to notify. Time to destination ' + timeStr)
 
 
 

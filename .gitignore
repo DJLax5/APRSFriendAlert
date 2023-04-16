@@ -164,3 +164,6 @@ cython_debug/
 aprsBot.log
 aprsBotData.json
 
+# Local json file for a test route
+tests/route.json
+

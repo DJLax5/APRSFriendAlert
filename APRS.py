@@ -60,6 +60,7 @@ class APRS():
         cf.log.debug('[APRS] New Thread entry')
         self._running = True
         failCount = 0
+        time.sleep(3) # Wait a sec, this relaxes the Telegram API a bit
         self.lastTimestamp = int(time.time()) # the thread has started, wait for the next incoming packet to be seen as "new"
         while self._stop_event == False: # loop, unless stopped
             cf.log.debug('[APRS] Querring APRS API...')
@@ -81,7 +82,7 @@ class APRS():
                     self.stop()
                     self._running = False
                     return
-                time.sleep(int(86+np.pow(4,failCount))) # implement the exponential backoff, The intervals are 90sec, 102sec, 150sec, etc.
+                time.sleep(int(86+np.power(4,failCount))) # implement the exponential backoff, The intervals are 90sec, 102sec, 150sec, etc.
         self._running = False
         cf.log.debug('[APRS] Thread exit')
 
@@ -109,7 +110,7 @@ class APRS():
                 cf.log.debug('[APRS] Data received: '+ str(lng) + ' ' +str(lat) + ' Timestamp: ' + str(timestamp))
                 return [lng, lat], timestamp
             except Exception as e:
-                cf.log.error('[APRS] Fetching APRS Data failes. Reason: ' + str(e))
+                cf.log.error('[APRS] Fetching APRS Data failed. Reason: ' + str(e))
                 return None
         else:
             cf.log.warn('[APRS] Tried getPosition, but APRS API is not validated!')
