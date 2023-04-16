@@ -47,7 +47,7 @@ class APRSFriendAlert:
 
         # Setup the API Bouncers 
         self.ors = OpenRouteService()
-        self.aprs = dummyAPRS(self.newAPRSData) # If you want to test: dummyAPRS(self.newAPRSDATA)
+        self.aprs = APRS(self.newAPRSData) # If you want to test: dummyAPRS(self.newAPRSDATA)
         self.tcm = TelegramChatManager(self.routeUpdate, self.ors.geocode)
         cf.log.addHandler(self.ErrorHandler(self.tcm.sendMessage, os.getenv('TELEGRAM_LOGGING_LEVEL'))) # now add the telegram error handler
         
