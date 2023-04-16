@@ -71,7 +71,6 @@ class TelegramChatManager:
 
     def execTCM(self):
         """This function will start the polling process of the Telegram bot. This function will not return."""
-        cf.log.info('[TCM] The telegram chat manager has started.')
         self.app.run_polling()
 
     def sendMessage(self, chatID, message):
@@ -226,7 +225,7 @@ class TelegramChatManager:
             context.user_data['COORDS'] = coords
             # make the goole maps link to check weather the coordinates are correct
             url = "https://www.google.com/maps/search/?api=1&query={},{}".format(coords[1], coords[0])
-            message = telegram.helpers.escape_markdown('Ok thank you. May I strore this address?\nPlease check the link, if the coordinates patch your expecxted address.\n\n' + context.user_data['ADDR_NAME']  + '\n' + context.user_data['ADDR'] + '\n' + str(coords[1]) + ', ' + str(coords[0]) + '\n\n' + url + '\n\nPlease respond with yes or no.', version= 2)
+            message = telegram.helpers.escape_markdown('Ok thank you. May I strore this address?\nPlease check the link, if the coordinates match your expecxted address.\n\n' + context.user_data['ADDR_NAME']  + '\n' + context.user_data['ADDR'] + '\n' + str(coords[1]) + ', ' + str(coords[0]) + '\n\n' + url + '\n\nPlease respond with yes or no.', version= 2)
             await update.message.reply_text(message, parse_mode='MarkdownV2')
             cf.log.debug('[TCM] User ' + cf.USER_DATA[chatid]['NAME'] + ' supplied the address ' + addr)
             return CHECK_ADDR
@@ -405,7 +404,7 @@ class TelegramChatManager:
                             msg = 'Multiple users have defined a address called ' + name 
                             msg += '\n'
                             for i in range(len(users)):
-                                msg+= str(i+1) + '. ' + cf.USER_DATA[users[i]]['NAME'] + '\n'
+                                msg+= str(i+1) + '. ' + cf.USER_DATA[users[i]]['NAME']  + ', ' +cf.USER_DATA[users[i]]['ADDRESSES'][ix[i]]['ADDR'] + '\n'
                             msg += '\nPlease respond just with the number infront of the user you want to select.'
                             # store the matched string for the next response
                             context.user_data['FOLLOW_MULTIPLE_USERS'] = True
@@ -464,7 +463,7 @@ class TelegramChatManager:
                     try:
                         new_ix = int(update.message.text) - 1 # try to get the id the user selected
                         destID = context.user_data['FOLLOW_USERS'][new_ix]
-                        coords = cf.USER_DATA[destID]['ADDRESSES'][context.user_data['FOLLOW_IXS'][new_ix]][coords]
+                        coords = cf.USER_DATA[destID]['ADDRESSES'][context.user_data['FOLLOW_IXS'][new_ix]]['COORDS']
                         if context.user_data['FOLLOW_ALERTEES'] == '': # no alert tag was found
                             alertees = [destID]
                         else: # there are alertees to be defined
@@ -483,10 +482,11 @@ class TelegramChatManager:
                         message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data is beeing tracked.',version = 2)
                         await update.message.reply_text(message, parse_mode='MarkdownV2')
                         return
-                    except:
+                    except Exception as e:
                         context.user_data['FOLLOW_MULTIPLE_USERS'] = True
                         message = telegram.helpers.escape_markdown('Sorry couldn\'t parse your digit. Please only respond with the single digit infront of the user.',version = 2)
                         await update.message.reply_text(message, parse_mode='MarkdownV2')
+                        cf.log.debug('[TCM] Couldn\'t parse response. Reason: ' + str(e))
                         return
                 else: # anything else as a message
                     message = telegram.helpers.escape_markdown('Couldn\'t parese your message. To activate the following process, pleas start your command with \'en route to\' \nSee /help to see all possible commands.',version = 2)
