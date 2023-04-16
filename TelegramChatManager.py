@@ -17,7 +17,6 @@ import re
 
 CONFIG_BOT, GET_NAME = range(2)
 GET_ADDR_NAME, GET_ADDR, CHECK_ADDR = range(3)
-SEL_RM_ADDR = range(1)
 
 class TelegramChatManager:
     """This Class will be a telegram bot application and handle all the communication and setup with the telegram users. It will trigger the request to follow the owner via APRS and supply a function to send messages directly to users."""
@@ -319,7 +318,7 @@ class TelegramChatManager:
                     msg = msg + 'USER: ' + cf.USER_DATA[userid]['NAME'] + '\n'
                     if not cf.USER_DATA[userid]['VALID']:
                         msg = msg + 'Not verified.\n\n'
-                    elif len(cf.USER_DATA[chatid]['ADDRESSES']) == 0:
+                    elif len(cf.USER_DATA[userid]['ADDRESSES']) == 0:
                         msg = msg + 'No addresses defined!\n\n'
                     else:
                         msg = msg + self.getAddressesStr(userid)
