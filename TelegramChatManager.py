@@ -319,13 +319,13 @@ class TelegramChatManager:
                     msg = msg + 'USER: ' + cf.USER_DATA[userid]['NAME'] + '\n'
                     if not cf.USER_DATA[userid]['VALID']:
                         msg = msg + 'Not verified.\n\n'
-                    elif cf.USER_DATA[chatid]['ADDRESSES'] == []:
+                    elif len(cf.USER_DATA[chatid]['ADDRESSES']) == 0:
                         msg = msg + 'No addresses defined!\n\n'
                     else:
                         msg = msg + self.getAddressesStr(userid)
                 cf.log.debug('[TCM] The control chat just requested all data.')
             else:
-                if cf.USER_DATA[chatid]['ADDRESSES'] == []:
+                if len(cf.USER_DATA[chatid]['ADDRESSES']) != 0:
                     msg = 'Here are your stored addresses: \n\n'
                     msg = msg + self.getAddressesStr(chatid)
                 else:
