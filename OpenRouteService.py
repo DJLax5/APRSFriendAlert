@@ -16,7 +16,7 @@ class OpenRouteService:
 
         self.validated = False
         self.key = os.getenv('OPEN_ROUTE_SERVICE_KEY')
-        if self.key != None and self.key != '': # demo bounce the API to check it is working
+        if self.key != None and self.key != '': # demo bounce the API to check if it is working
             # Simply try to geocode "Berlin, Germany"
             coord = self.geocode("Berlin, Germany", tryAnyway = True)
             if coord != None:

@@ -32,7 +32,7 @@ class APRS():
         # check the correctness of the set data
         self.validated = False
         if self.key != None and self.key != '' and self.call != None and self.call != '':
-            data = self.getPosition(tryAnyway=True) 
+            data = self.getPosition(tryAnyway=True) # Try to query the postion
             if data != None:
                 self.validated = True
                 cf.log.info('[APRS] APRS Validated! Response: ' + str(data))
@@ -42,14 +42,14 @@ class APRS():
                 cf.log.critical('[APRS] Unable to validate APRS API!')
 
         else:
-            cf.log.error('[APRS] APRS API Key/Call is not set, cannot use APRS!')
+            cf.log.critical('[APRS] APRS API Key/Call is not set, cannot use APRS!')
 
     def stop(self):
         """ Stops the thread. To peacfully exit the infiite loop"""
         self._stop_event = True
 
     def start(self):
-        """Creates a new thread using the run function and starts it, if we cannot use the previous thread"""
+        """Creates a new thread using the run function and starts it, if we cannot use the previous/still running thread"""
         self._stop_event = False
         if self._running == False:
             threading.Thread(target=self.run).start()
@@ -60,14 +60,14 @@ class APRS():
         cf.log.debug('[APRS] New Thread entry')
         self._running = True
         failCount = 0
-        self.lastTimestamp = int(time.time()) # the thread has started, waint for the next incoming packet to be seen as "new"
+        self.lastTimestamp = int(time.time()) # the thread has started, wait for the next incoming packet to be seen as "new"
         while self._stop_event == False: # loop, unless stopped
             cf.log.debug('[APRS] Querring APRS API...')
             data = self.getPosition()
             if data != None:
                 newTimestamp = data[1]
                 newCoord = data[0]
-                if newTimestamp > self.lastTimestamp:
+                if newTimestamp > self.lastTimestamp: # chek weather this data is duplicate or new
                     self.coord = newCoord
                     self.lastTimestamp = newTimestamp
                     self.newDataHandler(newCoord) # Call the new Data Handler with the new coordinates
@@ -79,6 +79,7 @@ class APRS():
                     cf.log.critical('[APRS] Data fetching failed for 6 or more consecutive events!') # The last try was more than 1h ago, we're gonna shutoff
                     self.validated = False
                     self.stop()
+                    self._running = False
                     return
                 time.sleep(int(86+np.pow(4,failCount))) # implement the exponential backoff, The intervals are 90sec, 102sec, 150sec, etc.
         self._running = False
@@ -86,7 +87,7 @@ class APRS():
 
     def getPosition(self, tryAnyway=False):
         """ This function calls the APRS API and querys the postion. It will return ([longitude, latitude], timestamp) or None, if the query fails."""
-        if self.validated or tryAnyway:
+        if self.validated or tryAnyway: # Only query API once it has been tested to work
             try:
                 params = {
                         "name" : self.call,

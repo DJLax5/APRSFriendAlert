@@ -26,7 +26,7 @@ def saveConfiguration():
         data['USER_DATA'] = USER_DATA
         with open(os.getenv('CONFIG_FILE_PATH'), 'w') as f:
             f.write(json.dumps(data))
-        log.debug('[CONFIG] Configuration file written.')
+        log.info('[CONFIG] Configuration file written.')
     except Exception as e:
         log.error('[CONFIG] Writing data file failed. Reason: ' + str(e))
 

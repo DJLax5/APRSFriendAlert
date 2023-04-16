@@ -14,15 +14,21 @@ class APRSFriendAlert:
 
     class ErrorHandler(logging.Handler):
         """ An inner class which provides the error handler to also send messages to telegram."""
-        def __init__(self, afa) -> None:
+        def __init__(self, messageCallback, level = 'ERROR') -> None:
+            """Here you define a function to be called with a chat ID and message and a logging level"""
             super().__init__()
-            self.afa = afa # store APRSFriendAlertObject
+            self.messageCallback = messageCallback # store callback function
+            try:
+                self.level = int(logging.getLevelName(level)) # try to get the level, revert to 'ERROR' if it fails
+            except:
+                self.level = 40
+                cf.log.error('[AFA] Could not determine the logging-level for telegram messages. Default: ERROR')
 
         def emit(self, record):
             """ The function which is called on each logging event, pushes the errors and worse to telegram"""
-            if record.levelno == logging.CRITICAL or record.levelno == logging.ERROR:
+            if record.levelno >= self.level: # record passt the threshold
                 try:
-                    self.afa.tcm.sendMessage(cf.MASTER_CHATID,'Oh no! There was an error! \n' + record.message)
+                    self.messageCallback(cf.MASTER_CHATID,'LOGGING EVENT:\n[' + record.levelname + '] ' + record.message)
                 except: # this exception is not needed, the error is logged anyways
                     pass
     
@@ -41,7 +47,7 @@ class APRSFriendAlert:
         self.ors = OpenRouteService()
         self.aprs = APRS(self.newAPRSData)
         self.tcm = TelegramChatManager(self.routeUpdate, self.ors.geocode)
-        cf.log.addHandler(self.ErrorHandler(self)) # now add the telegram error handler
+        cf.log.addHandler(self.ErrorHandler(self.tcm.sendMessage, os.getenv('TELEGRAM_LOGGING_LEVEL'))) # now add the telegram error handler
         
     def main(self):
         """This function starts the telegram conversation handler. This function will not return, as long as the bot is running."""
@@ -49,7 +55,7 @@ class APRSFriendAlert:
 
     @staticmethod
     def getTimeStr(time):
-        """Basic methon to convert minutes into a string in h and mins."""
+        """Basic methond to convert minutes into a string in h and mins."""
         hours, minutes = divmod(round(time), 60)
         if hours == 0:
             output_str = f"{minutes} min"
@@ -65,7 +71,7 @@ class APRSFriendAlert:
         if not self.following: # following stopped by someone, stop the aprs thread
             self.aprs.stop() 
             return
-        
+        cf.log.debug('[AFA] New APRS Data!')
         # now chech how long it takes from the current position to the destination
         response = self.ors.getRouteSummary(coords, self.dest) 
         if response != None:
@@ -88,7 +94,7 @@ class APRSFriendAlert:
                 self.tcm.sendMessage(cf.MASTER_CHATID, 'EN-ROUTE!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is now beeing followed. Your route is ' + str(distance) + ' km long and will take ' + timeStr + '.\nYou can cancel this, by the /quit command.')
                 for alertee in self.alertees:
                     self.tcm.sendMessage(alertee, 'Great!\n'+ os.getenv('APRS_FOLLOW_CALL') + ' is on its way to you!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.'  )
-                cf.log.debug('Follow Process is started, first packet arrived successfully!')
+                cf.log.info('Follow Process is started, first packet arrived successfully!')
 
             else:
                 # now get the next index of the time we have to wait for. 
@@ -104,12 +110,16 @@ class APRSFriendAlert:
                         self.tcm(cf.MASTER_CHATID, 'You\'ve arrived at your destination.')
                         self.aprs.stop()
                         self.following = False
+                        cf.log.info('[AFA] You have arrived at your desitination. Stopping processes...')
                     else:
                         message = os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.'
                     
                     # message is built, send it 
                     for alertee in self.alertees:
                         self.tcm.sendMessage(alertee, message)
+                    cf.log.debug('[AFA] Messages have been set. Time to destination ' + timeStr)
+                else:
+                    cf.log.debug('[AFA] Nobody to notiify. Time to destination ' + timeStr)
 
 
 
