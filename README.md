@@ -22,4 +22,4 @@ You can run this in a Docker container. For that use:
 
 `docker run -d -v /absoulte/path/to/this/repo:/usr/src/app aprsfriendalert`
 
-There is no warranty whatsoever.
+There is no warranty whatsoever. And surely, there are spelling mistakes in the Telegram messages.
