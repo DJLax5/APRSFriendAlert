@@ -167,3 +167,6 @@ aprsBotData.json
 # Local json file for a test route
 tests/route.json
 
+# Local run config
+launch.json
+

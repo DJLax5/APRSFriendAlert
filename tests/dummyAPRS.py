@@ -55,5 +55,5 @@ class dummyAPRS():
         cf.log.debug('[DUMMY APRS] Retruning next coords')
         self.ix += 1
         if self.ix >= len(self.coords):
-            self.ix = 1
+            self.ix = 0
         return self.coords[self.ix]

@@ -146,6 +146,10 @@ class TelegramChatManager:
             name = update.effective_user.first_name
         else: # use user supplied name
             name = update.message.text
+        if self.getIDbyName(name) != None:
+            message = telegram.helpers.escape_markdown('Sorry, there already exists a user named ' + name +'\n Please give me a different name.', version= 2)
+            await update.message.reply_text(message, parse_mode='MarkdownV2')
+            return GET_NAME
         # prepare the dataset 
         cf.USER_DATA[chatid] = {}
         cf.USER_DATA[chatid]['NAME'] = name
@@ -263,12 +267,6 @@ class TelegramChatManager:
                         message = telegram.helpers.escape_markdown('Sorry, there is no user named ' + name,version = 2)
                         await update.message.reply_text(message, parse_mode='MarkdownV2')
                         return 
-                    if len(id) > 1: # multiple users with the same name.... Hopefully never happens
-                        message = telegram.helpers.escape_markdown('Sorry, there are multiple user named ' + name + '. During development, this has been seen as possible, but intentionally ignored. Please notify the users to change their name to something unique. Use /chname for that.',version = 2)
-                        await update.message.reply_text(message, parse_mode='MarkdownV2')
-                        cf.log.warn('[TCM] There are multiple user named ' + name +'. Cannot identify the user to remove the address.')
-                        return
-                    id = id[0]
                     if ix >= len(cf.USER_DATA[id]['ADDRESSES']): # check weather the address index exits
                         message = telegram.helpers.escape_markdown('Sorry, there is no address with ID ' + str(ix+1), version = 2)
                         await update.message.reply_text(message, parse_mode='MarkdownV2')
@@ -375,17 +373,19 @@ class TelegramChatManager:
                     return
                 
                 # first, check if the enroute command is detected
-                pattern = r"(?i)^(en.?route to|enroute to) (.+?)(?: alert ((?:[^,]+(?:, )?)+))?$"
+                pattern = r"(?i)^(en.?route to|enroute to) (.+?)(?: (?:alert|notify) ((?:[^,]+(?:, )?)+))?$"
                 match = re.match(pattern, update.message.text)
                 if match: # yes, the string matches the regex                    
                     name = match.group(2) # get the nam 
                     # first try to find the user with that name
-                    ids = self.getIDbyName(name)
+                    id = self.getIDbyName(name)
                     destID = None
                     coords = None
                     alertees = []
                     msg = ''
-                    if ids == None: # ok there is no user with that name. Try to get the address by this name
+                    addrName = ''
+                    toStr = ''
+                    if id == None: # ok there is no user with that name. Try to get the address by this name
                         users, ix = self.getIDbyAddrName(name)
                         if len(users) > 1: # oh no, multiple same name addresses have been defined, lets deal with that
                             msg = 'Multiple users have defined a address called ' + name 
@@ -406,40 +406,36 @@ class TelegramChatManager:
                         elif len(users) == 1: # address found, use that as the destination
                             destID = users[0]
                             coords = cf.USER_DATA[destID]['ADDRESSES'][ix[0]]['COORDS']
+                            addrName = cf.USER_DATA[destID]['ADDRESSES'][ix[0]]['ADDR_NAME']
                         else: # not found
                             message = telegram.helpers.escape_markdown('Couldn\'t find user or address ' + name,version = 2)
                             await update.message.reply_text(message, parse_mode='MarkdownV2')
                             return
                     else:
-                        if len(ids) > 1: # more than one user with that name, hopefully never happens
-                            message = telegram.helpers.escape_markdown('There are multiple users called ' + name + '. During development, this has been seen as possible, but intentionally ignored. Please notify the users to change their name to something unique. Use /chname for that.',version = 2)
-                            await update.message.reply_text(message, parse_mode='MarkdownV2')
-                            cf.log.warn('[TCM] There are multiple users named ' + name + '. Cannot decide to which to go.')
-                            return
-                        ids = ids[0] # user found
                         # check weather the user has exactly one address defined
-                        if len(cf.USER_DATA[ids]['ADDRESSES']) != 1:
+                        if len(cf.USER_DATA[id]['ADDRESSES']) != 1:
                             message = telegram.helpers.escape_markdown('User ' + name + ' has not exactly one address defined. Use the en-route command with the address name instread.',version = 2)
                             await update.message.reply_text(message, parse_mode='MarkdownV2')
                             return
                         # great destination found!
-                        destID = ids
+                        destID = id
                         coords = cf.USER_DATA[destID]['ADDRESSES'][0]['COORDS']
+                        addrName = cf.USER_DATA[destID]['ADDRESSES'][0]['ADDR_NAME']
                     # was the "alert" tag mentioned? If yes, build the user list to notify, if not juts noitify the owner of the address
                     alertee_names = match.group(3).split(", ") if match.group(3) else []
                     if alertee_names == []:
                         alertees.append(destID) # not specified, just notify the owner of the desitnation address
                     else: # specified, find the users to alert
+                        toStr = cf.USER_DATA[destID]['NAME'] + '\'s address ' + addrName
                         for alertee in alertee_names:
                             destID = self.getIDbyName(alertee)
-                            if destID != None: # for once multiple users with the same name do not bother us!
-                                alertees = alertees + destID
+                            if destID != None: 
+                                alertees.append(destID)
                         if len(alertee_names) > len(alertees): # but, some users could not be found, don't do anything
-                            # NOTE: Rare exception may occurr: One user is not found and one username exists twice. That passes this check, but hopefully never happens
                             message = telegram.helpers.escape_markdown('Couldn\'t find all the users you requested! Please try again, I won\'t do anything.',version = 2)
                             await update.message.reply_text(message, parse_mode='MarkdownV2')
                             return
-                    self.newRoute(coords, alertees) # message parsed successfully
+                    self.newRoute(coords, alertees, toStr) # message parsed successfully
                     message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data beeing tracked.\nType /quit to abort.',version = 2)
                     await update.message.reply_text(message, parse_mode='MarkdownV2')
                     cf.log.info('[TCM] Successfully parsed message ' + update.message.text)
@@ -447,25 +443,28 @@ class TelegramChatManager:
                 # regex does not match, but matched once bevor, get the address ID we found
                 elif context.user_data.get('FOLLOW_MULTIPLE_USERS') and context.user_data['FOLLOW_MULTIPLE_USERS'] == True:
                     context.user_data['FOLLOW_MULTIPLE_USERS'] == False
+                    toStr = ''
+                    addrName = ''
                     try:
                         new_ix = int(update.message.text) - 1 # try to get the id the user selected
                         destID = context.user_data['FOLLOW_USERS'][new_ix]
                         coords = cf.USER_DATA[destID]['ADDRESSES'][context.user_data['FOLLOW_IXS'][new_ix]]['COORDS']
+                        addrName = cf.USER_DATA[destID]['ADDRESSES'][context.user_data['FOLLOW_IXS'][new_ix]]['ADDR_NAME']
                         if context.user_data['FOLLOW_ALERTEES'] == '': # no alert tag was found
                             alertees = [destID]
                         else: # there are alertees to be defined
+                            toStr = cf.USER_DATA[destID]['NAME'] + '\'s address ' + addrName
                             for alertee in alertee_names:
                                 destID = self.getIDbyName(alertee)
                                 if destID != None: # for once multiple users with the same name do not bother us!
-                                    alertees = alertees + destID
+                                    alertees.append(destID)
                             if len(alertee_names) > len(alertees):  # but, some users could not be found, don't do anything
-                                # NOTE: Rare exception may occurr: One user is not found and one username exists twice. That passes this check, but hopefully never happens
                                 # fall out of conversation
                                 message = telegram.helpers.escape_markdown('Couldn\'t find all the users you requested! Please try again, I won\'t do anything.',version = 2)
                                 await update.message.reply_text(message, parse_mode='MarkdownV2')
                                 return
                         # route successfully parsed!
-                        self.newRoute(coords, alertees)
+                        self.newRoute(coords, alertees, toStr)
                         message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data is beeing tracked.',version = 2)
                         await update.message.reply_text(message, parse_mode='MarkdownV2')
                         return
@@ -532,6 +531,10 @@ class TelegramChatManager:
                 await update.message.reply_text(message, parse_mode='MarkdownV2')
                 return
             name = " ".join(context.args) # we allow for spaces in the name
+            if self.getIDbyName(name) != None:
+                message = telegram.helpers.escape_markdown('Sorry, there already exists a user named ' + name + '. Please try again.',version = 2)
+                await update.message.reply_text(message, parse_mode='MarkdownV2')
+                return
             cf.log.info('[TCM] User ' + cf.USER_DATA[chatid]['NAME'] + ' changed its name to ' + name)
             cf.USER_DATA[chatid]['NAME'] = name # update name
             cf.saveConfiguration()
@@ -554,12 +557,6 @@ class TelegramChatManager:
             name = " ".join(context.args)
             ci = self.getIDbyName(name) # try to find the name
             if ci != None:
-                    if len(ci) > 1:
-                        message = telegram.helpers.escape_markdown('There are multiple users named ' + cf.USER_DATA[ci]['NAME'] + '. During development, this has been seen as possible, but intentionally ignored. Please notify the users to change their name to something unique. Use /chname for that.',version = 2)
-                        await update.message.reply_text(message, parse_mode='MarkdownV2')
-                        cf.log.warn('[TCM] Cannot verify user by name, there are multiple users with the same name.')
-                        return
-                    ci = ci[0]
                     if cf.USER_DATA[ci]['VALID'] == True:
                         message = telegram.helpers.escape_markdown(cf.USER_DATA[ci]['NAME'] + ' is already verified.',version = 2)
                         await update.message.reply_text(message, parse_mode='MarkdownV2')
@@ -599,12 +596,6 @@ class TelegramChatManager:
                 await update.message.reply_text(message, parse_mode='MarkdownV2')
                 cf.log.debug('[TCM] Cannot delete user ' + name + '. User not found.')
                 return
-            if len(id) > 1:
-                message = telegram.helpers.escape_markdown('There are multiple users named ' + name + '. During development, this has been seen possible, but intentionally ignored. Please notify the users to change their name to something unique. Use /chname for that.',version = 2)
-                await update.message.reply_text(message, parse_mode='MarkdownV2')
-                cf.log.warn('[TCM] Cannot verify user by name, there are multiple users with the same name.')
-                return
-            id = id[0]
             if id == chatid:
                 message = telegram.helpers.escape_markdown('You can\'t delete yourself.',version = 2)
                 cf.log.debug('[TCM] User ' + name + ' tried to delete itself.')
@@ -652,13 +643,10 @@ class TelegramChatManager:
     
     def getIDbyName(self, name):
         """Function used to find the chatid by the users name"""
-        users = []
         for ci in cf.USER_DATA.keys():
             if cf.USER_DATA[ci]['NAME'] == name:
-                users.append(ci) # multiple users with the same name possible
-        if users == []:
-            return None
-        return users
+                return ci # Multiple same name users are forbidden 
+        return None
     def getIDbyAddrName(self, addrName):
         """Function used to find the chatids and indices of an address by the address name. """
         users = []
