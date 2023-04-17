@@ -20,9 +20,12 @@ class dummyAPRS():
         
 
         self.ix = 0
-        with open('tests/route.json') as f:
-            self.coords = json.loads(f.read())
-
+        try:    
+            with open('tests/route.json') as f:
+                self.coords = json.loads(f.read())
+        except:
+            cf.log.critical('[DUMMY APRS] Cannot load route.json')
+            self.coords= [[0,0], [1,1] ]
                        
         cf.log.warn('[DUMMY APRS] The DUMMY APRS class is in use. No actual APRS Data is used!')
 

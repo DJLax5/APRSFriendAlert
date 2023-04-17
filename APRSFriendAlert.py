@@ -155,7 +155,7 @@ class APRSFriendAlert:
 
 
 if __name__ == '__main__':
-    afa = APRSFriendAlert(dummy=True)
+    afa = APRSFriendAlert(dummy=False) # change to true for testing
     afa.main()
     afa.aprs.stop()
     cf.log.info('[AFA] System shutting down.')
