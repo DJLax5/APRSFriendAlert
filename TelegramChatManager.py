@@ -388,11 +388,11 @@ class TelegramChatManager:
                     if id == None: # ok there is no user with that name. Try to get the address by this name
                         users, ix = self.getIDbyAddrName(name)
                         if len(users) > 1: # oh no, multiple same name addresses have been defined, lets deal with that
-                            msg = 'Multiple users have defined a address called ' + name 
+                            msg = 'There is more than one address called ' + name 
                             msg += '\n'
                             for i in range(len(users)):
                                 msg+= str(i+1) + '. ' + cf.USER_DATA[users[i]]['NAME']  + ', ' +cf.USER_DATA[users[i]]['ADDRESSES'][ix[i]]['ADDR'] + '\n'
-                            msg += '\nPlease respond just with the number infront of the user you want to select.'
+                            msg += '\nPlease respond just with the number infront of the address you want to select.'
                             # store the matched string for the next response
                             context.user_data['FOLLOW_MULTIPLE_USERS'] = True
                             context.user_data['FOLLOW_USERS'] = users
@@ -412,10 +412,27 @@ class TelegramChatManager:
                             await update.message.reply_text(message, parse_mode='MarkdownV2')
                             return
                     else:
-                        # check weather the user has exactly one address defined
-                        if len(cf.USER_DATA[id]['ADDRESSES']) != 1:
-                            message = telegram.helpers.escape_markdown('User ' + name + ' has not exactly one address defined. Use the en-route command with the address name instread.',version = 2)
+                        # check if the user has at least one address defined
+                        if len(cf.USER_DATA[id]['ADDRESSES']) == 0:
+                            message = telegram.helpers.escape_markdown('Sorry, but user ' + cf.USER_DATA[id]['NAME'] + ' has no address defined.',version = 2)
+                            await update.message.reply_text(message, parse_mode='MarkdownV2'),
+                            return
+                        # check weather the user has more than one address defined
+                        if len(cf.USER_DATA[id]['ADDRESSES']) > 1:
+                            msg = 'The user ' +  cf.USER_DATA[id]['NAME'] + ' has more than one addresses defined. Please select:'
+                            msg += '\n'
+                            for i in range(len(cf.USER_DATA[id]['ADDRESSES'])):
+                                msg+= str(i+1) + '. ' + cf.USER_DATA[id]['ADDRESSES'][i]['ADDR_NAME']  + ', ' +cf.USER_DATA[id]['ADDRESSES'][i]['ADDR'] + '\n'
+                            msg += '\nPlease respond just with the number infront of the address you want to select.'
+                            # store the matched string for the next response
+                            context.user_data['FOLLOW_MULTIPLE_USERS'] = True
+                            context.user_data['FOLLOW_USERS'] = [id] * len(cf.USER_DATA[id]['ADDRESSES'])
+                            context.user_data['FOLLOW_IXS'] = range(len(cf.USER_DATA[id]['ADDRESSES']))
+                            context.user_data['FOLLOW_ALERTEES'] = match.group(3) if match.group(3) else ''
+
+                            message = telegram.helpers.escape_markdown(msg,version = 2)
                             await update.message.reply_text(message, parse_mode='MarkdownV2')
+                            cf.log.debug('[TCM] User ' + cf.USER_DATA[id]['NAME'] + ' has more than one address defined. Asking for the corret one.')
                             return
                         # great destination found!
                         destID = id
@@ -436,7 +453,7 @@ class TelegramChatManager:
                             await update.message.reply_text(message, parse_mode='MarkdownV2')
                             return
                     self.newRoute(coords, alertees, toStr) # message parsed successfully
-                    message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data beeing tracked.\nType /quit to abort.',version = 2)
+                    message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data is beeing tracked.\nType /quit to abort.',version = 2)
                     await update.message.reply_text(message, parse_mode='MarkdownV2')
                     cf.log.info('[TCM] Successfully parsed message ' + update.message.text)
 
@@ -454,9 +471,11 @@ class TelegramChatManager:
                             alertees = [destID]
                         else: # there are alertees to be defined
                             toStr = cf.USER_DATA[destID]['NAME'] + '\'s address ' + addrName
+                            alertee_names = context.user_data['FOLLOW_ALERTEES'].split(", ")
+                            alertees = []
                             for alertee in alertee_names:
                                 destID = self.getIDbyName(alertee)
-                                if destID != None: # for once multiple users with the same name do not bother us!
+                                if destID != None: 
                                     alertees.append(destID)
                             if len(alertee_names) > len(alertees):  # but, some users could not be found, don't do anything
                                 # fall out of conversation
@@ -467,6 +486,7 @@ class TelegramChatManager:
                         self.newRoute(coords, alertees, toStr)
                         message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data is beeing tracked.',version = 2)
                         await update.message.reply_text(message, parse_mode='MarkdownV2')
+                        cf.log.info('[TCM] New route started to address  ' + addrName)
                         return
                     except Exception as e:
                         context.user_data['FOLLOW_MULTIPLE_USERS'] = True
