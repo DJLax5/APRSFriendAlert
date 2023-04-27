@@ -41,8 +41,8 @@ class APRSFriendAlert:
         self.following = False
         self.dest = None
         self.alertees = None
-        self.ALERT_TIMES = [-1, 60, 30, 10, 1] # the intervals during which the alertees are alerted. -1 means the inital away time, regardless of how far that is
-        self.alertState = [False, False, False, False, False, False]
+        self.ALERT_TIMES = [-1, 60, 30, 10, 5, 1] # the intervals during which the alertees are alerted. -1 means the inital away time, regardless of how far that is
+        self.alertState = [False for i in range(len(self.ALERT_TIMES))]
         self.toStr = 'you'
 
         # Setup the API Bouncers 
@@ -97,9 +97,10 @@ class APRSFriendAlert:
                     return
                 # Ok now send the messages
                 self.tcm.sendMessage(cf.MASTER_CHATID, '\U0001F698 EN-ROUTE \U0001F698 \n' + os.getenv('APRS_FOLLOW_CALL') + ' is now beeing followed. Your route is ' + str(distance) + ' km long and will take ' + timeStr + '.')
+                url = 'https://aprs.fi/#!mt=roadmap&z=11&call=a%2F{}&timerange=3600&tail=3600'.format( os.getenv('APRS_FOLLOW_CALL'))
                 for alertee in self.alertees:
-                    self.tcm.sendMessage(alertee, 'Great! \U0001F698\n'+ os.getenv('APRS_FOLLOW_CALL') + ' is on its way to '+ self.toStr +'!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.'  )
-                cf.log.info('Follow Process is started, first packet arrived successfully!')
+                    self.tcm.sendMessage(alertee, 'Great! \U0001F698\n'+ os.getenv('APRS_FOLLOW_CALL') + ' is on its way to '+ self.toStr +'!\n' + os.getenv('APRS_FOLLOW_CALL') + ' is currently ' + str(distance) + ' km and ' + timeStr + ' away.\n\nYou can see ' +   os.getenv('APRS_FOLLOW_CALL')+'\'s position here:\n' + url)
+                cf.log.info('[AFA] Follow Process is started, first packet arrived successfully!')
 
             else:
                 # now get the next index of the time we have to wait for. 
