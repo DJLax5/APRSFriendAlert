@@ -22,7 +22,7 @@ class TelegramChatManager:
     """This Class will be a telegram bot application and handle all the communication and setup with the telegram users. It will trigger the request to follow the owner via APRS and supply a function to send messages directly to users."""
     
 
-    def __init__(self, newRouteCallback, geocodeCallback):
+    def __init__(self, newRouteCallback, geocodeCallback, arrivedCallback):
         """Construct the chat manager object. It allows to handle conversations with multiple users"""
         self.bot = telegram.Bot(token=os.getenv('TELEGRAM_TOKEN')) #simple object to send single messages without conversation control
 
@@ -56,6 +56,7 @@ class TelegramChatManager:
         self.app.add_handler(CommandHandler("takeover", self.handleTakeover))
         self.app.add_handler(CommandHandler("show", self.handleShAddress))
         self.app.add_handler(CommandHandler("quit", self.handleQuit))
+        self.app.add_handler(CommandHandler("arrived", self.handleArrived))
         self.app.add_handler(CommandHandler("chname", self.handleChName))
         self.app.add_handler(CommandHandler("verify", self.handleVerify))
         self.app.add_handler(CommandHandler("rmuser", self.handleRMuser))
@@ -67,6 +68,7 @@ class TelegramChatManager:
         # store the callback functions
         self.newRoute = newRouteCallback
         self.geocode = geocodeCallback
+        self.arrived = arrivedCallback
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
 
@@ -352,6 +354,7 @@ class TelegramChatManager:
                 msg += '\nHere are the special control commands:\n'
                 msg += '/rmuser [NAME] \t- deletes the user\n'
                 msg += '/verify [NAME] \t- verifys the user so they can use this bot\n'
+                msg += '/arrived \t- manually trigers the arrival procedure prematurely\n'
                 msg += '\n'
                 msg += 'To start the APRS follow process, use:\n'
                 msg += 'en route to [NAME] {alert [USER-NAME]} \n'
@@ -453,7 +456,7 @@ class TelegramChatManager:
                             await update.message.reply_text(message, parse_mode='MarkdownV2')
                             return
                     self.newRoute(coords, alertees, toStr) # message parsed successfully
-                    message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data is beeing tracked.\nType /quit to abort.',version = 2)
+                    message = telegram.helpers.escape_markdown('Great! The following process started! From now on, your APRS data is beeing tracked.\nType /arrived to manually trigger the arrival messages or type /quit to abort.',version = 2)
                     await update.message.reply_text(message, parse_mode='MarkdownV2')
                     cf.log.info('[TCM] Successfully parsed message ' + update.message.text)
 
@@ -540,6 +543,21 @@ class TelegramChatManager:
                 context.user_data['FOLLOW_MULTIPLE_USERS'] = False # Fall out of conversation
             cf.log.debug('[TCM] User ' + cf.USER_DATA[chatid]['NAME'] + ' quitted a process/conversation.' )
         # Just to be sure, end convcersation regardless of sanity check
+        return ConversationHandler.END # fall out of conversation
+    
+    async def handleArrived(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """ Handle to Arrived command."""
+        if await self.sanityCheck(update):
+            chatid = str(update.message.chat_id)
+            if chatid != cf.MASTER_CHATID: # check privileges 
+                message = telegram.helpers.escape_markdown('Sorry this command ís only accessible to the owner.',version = 2)
+                await update.message.reply_text(message, parse_mode='MarkdownV2')
+                return 
+            if self.arrived() == False:
+                message = telegram.helpers.escape_markdown('Sorry, no following process is active.', version= 2)
+                await update.message.reply_text(message, parse_mode='MarkdownV2')
+            cf.log.debug('[TCM] Manually arrived at the destination.' )
+
         return ConversationHandler.END # fall out of conversation
 
     async def handleChName(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

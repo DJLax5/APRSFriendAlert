@@ -51,7 +51,7 @@ class APRSFriendAlert:
             self.aprs = dummyAPRS(self.newAPRSData)
         else:
             self.aprs = APRS(self.newAPRSData)
-        self.tcm = TelegramChatManager(self.routeUpdate, self.ors.geocode)
+        self.tcm = TelegramChatManager(self.routeUpdate, self.ors.geocode, self.arrived)
         cf.log.addHandler(self.ErrorHandler(self.tcm.sendMessage, os.getenv('TELEGRAM_LOGGING_LEVEL'))) # now add the telegram error handler
         
     def main(self):
@@ -149,6 +149,13 @@ class APRSFriendAlert:
                 self.toStr = toStr
             self.aprs.start()
             cf.log.info('[AFA] New following process initiated.')
+
+    def arrived(self):
+        """  This function may be called from the TCM. It is used to manually trigger the arrival. It returns false, if there is no routing active. Otherwise true."""
+        if self.following == False:
+            return False
+        self.newAPRSData(self.dest)
+        return True
 
 
     
