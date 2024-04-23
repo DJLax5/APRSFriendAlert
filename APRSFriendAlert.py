@@ -78,11 +78,11 @@ class APRSFriendAlert:
             return
         cf.log.debug('[AFA] New APRS Data!')
         
-        if coords != self.dist:
+        if coords != self.dest:
             response = self.ors.getRouteSummary(coords, self.dest) # now check how long it takes from the current position to the destination
         else:
             response = [0.0, 0.0]
-            
+
         if response != None:
             # extract the distance and time 
             distance = np.round(response[0],1)
