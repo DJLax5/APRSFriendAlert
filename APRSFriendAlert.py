@@ -29,7 +29,7 @@ class APRSFriendAlert:
             """ The function which is called on each logging event, pushes the errors and worse to telegram"""
             if record.levelno >= self.level: # record passt the threshold
                 try:
-                    self.messageCallback(cf.MASTER_CHATID,'\0001F6A7 LOGGING EVENT \0001F6A7\n[' + record.levelname + '] ' + record.message)
+                    self.messageCallback(cf.MASTER_CHATID,'\U0001F6A7 LOGGING EVENT \U0001F6A7\n[' + record.levelname + '] ' + record.message)
                 except: # this exception is not needed, the error is logged anyways
                     pass
     
@@ -154,7 +154,8 @@ class APRSFriendAlert:
         """  This function may be called from the TCM. It is used to manually trigger the arrival. It returns false, if there is no routing active. Otherwise true."""
         if self.following == False:
             return False
-        self.newAPRSData(self.dest)
+        cf.log.info('[AFA] Manual arrival triggered.')
+        self.newAPRSData(self.dest * 1.001) # dogy fix, I know...
         return True
 
 
