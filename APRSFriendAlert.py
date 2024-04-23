@@ -77,8 +77,12 @@ class APRSFriendAlert:
             self.aprs.stop() 
             return
         cf.log.debug('[AFA] New APRS Data!')
-        # now chech how long it takes from the current position to the destination
-        response = self.ors.getRouteSummary(coords, self.dest) 
+        
+        if coords != self.dist:
+            response = self.ors.getRouteSummary(coords, self.dest) # now check how long it takes from the current position to the destination
+        else:
+            response = [0.0, 0.0]
+            
         if response != None:
             # extract the distance and time 
             distance = np.round(response[0],1)
@@ -155,7 +159,7 @@ class APRSFriendAlert:
         if self.following == False:
             return False
         cf.log.info('[AFA] Manual arrival triggered.')
-        self.newAPRSData(self.dest * 1.001) # dogy fix, I know...
+        self.newAPRSData(self.dest)
         return True
 
 
